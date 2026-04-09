@@ -10,6 +10,8 @@ public enum MarkdownLineKind: Hashable, Sendable {
     case divider
     case codeFence(language: String?)
     case code(text: String)
+    case table(cells: [String], isHeader: Bool)
+    case tableSeparator
 }
 
 public struct MarkdownLine: Hashable, Sendable, Identifiable {
@@ -87,7 +89,21 @@ public struct MarkdownLineParser: Sendable {
                 continue
             }
 
+            if let tableKind = tableKind(from: trimmed) {
+                result.append(MarkdownLine(lineNumber: lineNumber, rawText: rawLine, kind: tableKind))
+                continue
+            }
+
             result.append(MarkdownLine(lineNumber: lineNumber, rawText: rawLine, kind: .paragraph(text: rawLine)))
+        }
+
+        // Post-process: mark table headers (row before a separator)
+        for i in 0..<result.count {
+            if case .tableSeparator = result[i].kind,
+               i > 0,
+               case .table(let cells, _) = result[i - 1].kind {
+                result[i - 1] = MarkdownLine(lineNumber: result[i - 1].lineNumber, rawText: result[i - 1].rawText, kind: .table(cells: cells, isHeader: true))
+            }
         }
 
         return result.map { line in
@@ -108,7 +124,7 @@ public struct MarkdownLineParser: Sendable {
         case .blockquote(let t): text = t
         case .bullet(let t, _): text = t
         case .ordered(_, let t): text = t
-        case .empty, .divider, .codeFence, .code: return nil
+        case .empty, .divider, .codeFence, .code, .table, .tableSeparator: return nil
         }
 #if canImport(AppKit)
         return try? AttributedString(
@@ -141,5 +157,19 @@ public struct MarkdownLineParser: Sendable {
         let parts = line.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
         guard parts.count == 2, let index = Int(parts[0]), parts[1].first == " " else { return nil }
         return .ordered(index: index, text: String(parts[1].dropFirst()))
+    }
+
+    private func tableKind(from line: String) -> MarkdownLineKind? {
+        guard line.hasPrefix("|") && line.hasSuffix("|") else { return nil }
+        let cells = line.split(separator: "|", omittingEmptySubsequences: true)
+            .map { String($0.trimmingCharacters(in: .whitespaces)) }
+        guard !cells.isEmpty else { return nil }
+
+        let isSeparator = cells.allSatisfy { cell in
+            let stripped = cell.filter { $0 != " " }
+            return !stripped.isEmpty && stripped.allSatisfy { $0 == "-" || $0 == ":" }
+        }
+
+        return isSeparator ? .tableSeparator : .table(cells: cells, isHeader: false)
     }
 }

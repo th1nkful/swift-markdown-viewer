@@ -4,11 +4,13 @@ import PlanViewerCore
 
 struct ContentView: View {
     @EnvironmentObject private var appModel: AppModel
+    @Environment(\.theme) private var theme: AppTheme
     @State private var showingSettings = false
 
     var body: some View {
         NavigationSplitView {
             SidebarView(showingSettings: $showingSettings)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 400)
         } detail: {
             if let plan = appModel.selectedPlan {
                 PlanMarkdownView(plan: plan)
@@ -16,25 +18,31 @@ struct ContentView: View {
                 ContentUnavailableView("No Plan Selected", systemImage: "doc.text")
             }
         }
-        .navigationTitle("Planner")
+        .navigationSplitViewStyle(.prominentDetail)
+        .navigationTitle(compactTitle)
+        .navigationSubtitle(compactSubtitle)
         .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    appModel.reloadPlans()
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
+            ToolbarItem(placement: .automatic) {
+                HStack(spacing: 8) {
+                    Button {
+                        appModel.reloadPlansAsync()
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
 
-                Button {
-                    showingSettings = true
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
                 }
             }
         }
+        .tint(theme.isSystem ? nil : theme.mauve)
         .sheet(isPresented: $showingSettings) {
             WorkspaceSettingsView()
                 .environmentObject(appModel)
+                .environment(\.theme, theme)
         }
         .alert("Error", isPresented: Binding(get: {
             appModel.errorMessage != nil
@@ -45,6 +53,16 @@ struct ContentView: View {
         } message: {
             Text(appModel.errorMessage ?? "")
         }
+    }
+
+    private var compactTitle: String {
+        guard appModel.showCompactTitle, let plan = appModel.selectedPlan else { return "" }
+        return plan.h1Title ?? plan.displayName
+    }
+
+    private var compactSubtitle: String {
+        guard appModel.showCompactTitle, let plan = appModel.selectedPlan, plan.h1Title != nil else { return "" }
+        return plan.displayName
     }
 }
 #endif

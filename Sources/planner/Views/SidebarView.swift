@@ -5,13 +5,8 @@ import PlanViewerCore
 
 struct SidebarView: View {
     @EnvironmentObject private var appModel: AppModel
+    @Environment(\.theme) private var theme: AppTheme
     @Binding var showingSettings: Bool
-
-    private var groupedPlans: [(String, [PlanDocument])] {
-        Dictionary(grouping: appModel.plans, by: \.workspaceName)
-            .map { ($0.key, $0.value.sorted { $0.modifiedAt > $1.modifiedAt }) }
-            .sorted { $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending }
-    }
 
     private var selectionBinding: Binding<PlanDocument.ID?> {
         Binding(get: {
@@ -24,20 +19,20 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: selectionBinding) {
-            ForEach(groupedPlans, id: \.0) { workspaceName, plans in
-                Section(workspaceName) {
-                    ForEach(plans) { plan in
-                        SidebarRowView(plan: plan)
-                    }
-                }
+            ForEach(appModel.plans) { plan in
+                SidebarRowView(plan: plan)
+                    .listRowBackground(theme.isSystem ? nil : theme.mantle)
             }
         }
+        .scrollContentBackground(theme.isSystem ? .automatic : .hidden)
+        .background(theme.isSystem ? Color.clear : theme.mantle)
+        .background(WindowAppearanceSetter(isSystem: theme.isSystem, isDark: theme.isDark, backgroundColor: NSColor(theme.crust)))
         .overlay {
             if appModel.plans.isEmpty {
                 ContentUnavailableView(
                     "No Plans Found",
                     systemImage: "tray",
-                    description: Text("Planner scans ~/.claude/plans and groups them by project.")
+                    description: Text("No plans found in ~/.claude/plans")
                 )
             }
         }
@@ -45,21 +40,30 @@ struct SidebarView: View {
 }
 
 private struct SidebarRowView: View {
+    @Environment(\.theme) private var theme: AppTheme
     let plan: PlanDocument
 
+    private var showProject: Bool {
+        plan.workspaceName != "~/.claude/plans"
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(plan.displayName)
+        VStack(alignment: .leading, spacing: 3) {
+            Text(plan.h1Title ?? plan.displayName)
                 .font(.headline)
+                .foregroundStyle(theme.text)
+                .lineLimit(1)
             HStack {
-                Text(plan.workspaceName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if showProject {
+                    Text(plan.workspaceName)
+                        .font(.caption)
+                        .foregroundStyle(theme.subtext1)
+                        .lineLimit(1)
+                }
                 Spacer()
-                Text(plan.modifiedAt, style: .relative)
+                Text(relativeTime(from: plan.modifiedAt))
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(theme.subtext0)
             }
         }
         .tag(plan.id)
@@ -73,5 +77,43 @@ private struct SidebarRowView: View {
             }
         }
     }
+}
+
+private struct WindowAppearanceSetter: NSViewRepresentable {
+    let isSystem: Bool
+    let isDark: Bool
+    let backgroundColor: NSColor
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { self.apply(from: view) }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { self.apply(from: nsView) }
+    }
+
+    private func apply(from view: NSView) {
+        guard let window = view.window else { return }
+        if isSystem {
+            window.appearance = nil
+            window.backgroundColor = nil
+        } else {
+            window.appearance = NSAppearance(named: isDark ? .darkAqua : .aqua)
+            window.backgroundColor = backgroundColor
+        }
+    }
+}
+
+private func relativeTime(from date: Date) -> String {
+    let seconds = Date().timeIntervalSince(date)
+    let hours = Int(seconds / 3600)
+    if hours < 1 { return "less than an hour" }
+    if hours < 24 { return hours == 1 ? "1 hour" : "\(hours) hours" }
+    let days = hours / 24
+    if days < 7 { return days == 1 ? "1 day" : "\(days) days" }
+    let weeks = days / 7
+    return weeks == 1 ? "1 week" : "\(weeks) weeks"
 }
 #endif

@@ -14,6 +14,10 @@ final class AppModel: ObservableObject {
     @Published var fileCommentDraft = ""
     @Published var inlineCommentDraft = ""
     @Published var errorMessage: String?
+    @Published var showCompactTitle = false
+    @Published var selectedTheme: AppTheme {
+        didSet { UserDefaults.standard.set(selectedTheme.id, forKey: "selectedThemeID") }
+    }
 
     private let scanner = PlanScanner()
     private let promptBuilder = PlanPromptBuilder()
@@ -28,11 +32,26 @@ final class AppModel: ObservableObject {
         self.workspaceStore = WorkspaceStore(fileURL: supportDirectory.appendingPathComponent("workspaces.json"))
         self.commentStore = CommentStore(fileURL: supportDirectory.appendingPathComponent("comments.json"))
         self.workspaceConfiguration = workspaceStore.load()
+        let savedID = UserDefaults.standard.string(forKey: "selectedThemeID") ?? "system"
+        self.selectedTheme = AppTheme.allThemes.first { $0.id == savedID } ?? .system
         reloadPlans(selecting: startupArgument.fileURL)
     }
 
     func reloadPlans(selecting preferredURL: URL? = nil) {
-        plans = scanner.scan()
+        let scannedPlans = scanner.scan()
+        applyScannedPlans(scannedPlans, selecting: preferredURL)
+    }
+
+    func reloadPlansAsync() {
+        let scanner = self.scanner
+        Task.detached(priority: .userInitiated) {
+            let scannedPlans = scanner.scan()
+            await MainActor.run { self.applyScannedPlans(scannedPlans) }
+        }
+    }
+
+    private func applyScannedPlans(_ scannedPlans: [PlanDocument], selecting preferredURL: URL? = nil) {
+        plans = scannedPlans
 
         if let preferredURL {
             let standardized = preferredURL.standardizedFileURL
@@ -119,8 +138,15 @@ final class AppModel: ObservableObject {
     }
 
     func promptPreview() -> String {
-        syncFileComment()
-        return promptBuilder.buildPrompt(for: comments, template: workspaceConfiguration.promptTemplate)
+        var effectiveComments = comments.filter { comment in
+            if case .file = comment.anchor { return false }
+            return true
+        }
+        let trimmed = fileCommentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            effectiveComments.append(PlanComment(anchor: .file, text: trimmed))
+        }
+        return promptBuilder.buildPrompt(for: effectiveComments, template: workspaceConfiguration.promptTemplate)
     }
 
     func updatePromptTemplate(_ template: String) {

@@ -20,7 +20,7 @@ public struct PlanScanner: Sendable {
             .flatMap(scanWorkspace)
             .map { doc in
                 guard let projectName = mapping[doc.url.path] else { return doc }
-                return PlanDocument(url: doc.url, workspaceName: projectName, workspaceURL: doc.workspaceURL, modifiedAt: doc.modifiedAt)
+                return PlanDocument(url: doc.url, workspaceName: projectName, workspaceURL: doc.workspaceURL, modifiedAt: doc.modifiedAt, h1Title: doc.h1Title)
             }
             .sorted { lhs, rhs in
                 lhs.modifiedAt == rhs.modifiedAt ? lhs.url.path < rhs.url.path : lhs.modifiedAt > rhs.modifiedAt
@@ -50,7 +50,8 @@ public struct PlanScanner: Sendable {
                 url: fileURL,
                 workspaceName: target.name,
                 workspaceURL: target.url,
-                modifiedAt: values?.contentModificationDate ?? .distantPast
+                modifiedAt: values?.contentModificationDate ?? .distantPast,
+                h1Title: extractH1Title(from: fileURL)
             ))
         }
 
@@ -155,6 +156,20 @@ public struct PlanScanner: Sendable {
             current = current.deletingLastPathComponent()
         }
         return URL(fileURLWithPath: cwd).lastPathComponent
+    }
+
+    private func extractH1Title(from url: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { handle.closeFile() }
+        let data = handle.readData(ofLength: 4096)
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+        for line in text.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("# ") && !trimmed.hasPrefix("## ") {
+                return String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return nil
     }
 
     private func extractPlanFilePaths(from content: String) -> Set<String> {

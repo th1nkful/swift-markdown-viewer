@@ -13,6 +13,18 @@ struct WorkspaceSettingsView: View {
                 .font(.title3.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 10) {
+                Text("Theme")
+                    .font(.headline)
+                Picker("Theme", selection: $appModel.selectedTheme) {
+                    ForEach(AppTheme.allThemes) { theme in
+                        Text(theme.name).tag(theme)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.radioGroup)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Prompt Template")
                         .font(.headline)

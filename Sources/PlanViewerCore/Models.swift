@@ -6,13 +6,15 @@ public struct PlanDocument: Identifiable, Hashable, Sendable {
     public let workspaceName: String
     public let workspaceURL: URL
     public let modifiedAt: Date
+    public let h1Title: String?
 
-    public init(url: URL, workspaceName: String, workspaceURL: URL, modifiedAt: Date) {
+    public init(url: URL, workspaceName: String, workspaceURL: URL, modifiedAt: Date, h1Title: String? = nil) {
         self.id = url.path
         self.url = url
         self.workspaceName = workspaceName
         self.workspaceURL = workspaceURL
         self.modifiedAt = modifiedAt
+        self.h1Title = h1Title
     }
 
     public var displayName: String {
@@ -49,9 +51,11 @@ public struct PlanComment: Codable, Hashable, Identifiable, Sendable {
 
 public struct PlanPromptBuilder: Sendable {
     public static let defaultTemplate = """
-    {{file_comments_section}}
+    Here is feedback on the plan:
+    {{file_comments}}
 
-    {{inline_comments_section}}
+    Inline feedback:
+    {{inline_comments}}
     """
 
     public init() {}
@@ -75,21 +79,11 @@ public struct PlanPromptBuilder: Sendable {
 
         let fileCommentsText = fileComments.joined(separator: "\n\n")
         let inlineCommentsText = inlineComments.map { start, end, text in
-            if start == end {
-                return "Around L\(start): \(text)"
-            }
-            return "Around L\(start) to L\(end): \(text)"
+            start == end ? "Around L\(start): \(text)" : "Around L\(start) to L\(end): \(text)"
         }.joined(separator: "\n")
 
-        let fileSection = fileCommentsText.isEmpty ? "" : """
-        Here is feedback on the plan:
-        \(fileCommentsText)
-        """
-
-        let inlineSection = inlineCommentsText.isEmpty ? "" : """
-        Other feedback:
-        \(inlineCommentsText)
-        """
+        let fileSection = fileCommentsText.isEmpty ? "" : "Here is feedback on the plan:\n\(fileCommentsText)"
+        let inlineSection = inlineCommentsText.isEmpty ? "" : "Inline feedback:\n\(inlineCommentsText)"
 
         let resolvedTemplate = template?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             ? template ?? Self.defaultTemplate
