@@ -19,7 +19,9 @@ public struct PlanScanner: Sendable {
 
     public func workspaceTargets(homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory()), configuration: WorkspaceConfiguration) -> [WorkspaceTarget] {
         let defaults = defaultWorkspaceTargets(homeDirectory: homeDirectory)
-        let extras = configuration.extraDirectories.map { WorkspaceTarget(name: $0.name, url: $0.url) }
+        let extras = configuration.extraDirectories.flatMap { directory in
+            [WorkspaceTarget(name: directory.name, url: directory.url)] + nestedClaudeTargets(in: directory)
+        }
         return dedupe(defaults + extras)
     }
 
@@ -62,5 +64,37 @@ public struct PlanScanner: Sendable {
     private func dedupe(_ documents: [PlanDocument]) -> [PlanDocument] {
         var seen = Set<String>()
         return documents.filter { seen.insert($0.url.standardizedFileURL.path).inserted }
+    }
+
+    private func nestedClaudeTargets(in directory: WorkspaceDirectory) -> [WorkspaceTarget] {
+        guard FileManager.default.fileExists(atPath: directory.url.path) else { return [] }
+
+        let keys: Set<URLResourceKey> = [.isDirectoryKey]
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory.url,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsPackageDescendants]
+        ) else {
+            return []
+        }
+
+        var targets: [WorkspaceTarget] = []
+        for case let candidateURL as URL in enumerator {
+            guard candidateURL.lastPathComponent == ".claude" else { continue }
+
+            let plansURL = candidateURL.appendingPathComponent("plans", isDirectory: true)
+            let values = try? plansURL.resourceValues(forKeys: keys)
+            guard values?.isDirectory == true else {
+                enumerator.skipDescendants()
+                continue
+            }
+
+            let worktreeName = candidateURL.deletingLastPathComponent().lastPathComponent
+            let targetName = worktreeName == directory.name ? directory.name : "\(directory.name) / \(worktreeName)"
+            targets.append(WorkspaceTarget(name: targetName, url: plansURL))
+            enumerator.skipDescendants()
+        }
+
+        return dedupe(targets)
     }
 }

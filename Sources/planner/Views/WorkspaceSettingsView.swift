@@ -15,7 +15,7 @@ struct WorkspaceSettingsView: View {
             Text("Workspace Directories")
                 .font(.title3.weight(.semibold))
 
-            Text("Planner always scans ~/.claude/plans. Add repo or worktree directories here to view plans from the same workspace without opening another app window.")
+            Text("Planner always scans ~/.claude/plans. Added repo or worktree directories also include any nested .claude/plans folders, so a parent directory can surface plans from multiple worktrees.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
