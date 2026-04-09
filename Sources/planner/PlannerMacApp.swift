@@ -3,9 +3,11 @@ import AppKit
 import SwiftUI
 import PlanViewerCore
 
-private enum PlannerWindowSize {
+private struct PlannerWindowSize {
     static let settingsWidth: CGFloat = 520
     static let settingsHeight: CGFloat = 360
+
+    private init() {}
 }
 
 @main

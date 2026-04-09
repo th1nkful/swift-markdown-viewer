@@ -72,7 +72,7 @@ struct WorkspaceSettingsView: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
+        panel.canCreateDirectories = true
         if panel.runModal() == .OK {
             path = panel.url?.path ?? path
             if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
