@@ -20,7 +20,7 @@ public struct PlanScanner: Sendable {
     public func workspaceTargets(homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory()), configuration: WorkspaceConfiguration) -> [WorkspaceTarget] {
         let defaults = defaultWorkspaceTargets(homeDirectory: homeDirectory)
         let extras = configuration.extraDirectories.flatMap { directory in
-            [WorkspaceTarget(name: directory.name, url: directory.url)] + nestedClaudeTargets(in: directory)
+            nestedClaudeTargets(in: directory)
         }
         return dedupe(defaults + extras)
     }
@@ -67,32 +67,38 @@ public struct PlanScanner: Sendable {
     }
 
     private func nestedClaudeTargets(in directory: WorkspaceDirectory) -> [WorkspaceTarget] {
-        guard FileManager.default.fileExists(atPath: directory.url.path) else { return [] }
-
         let keys: Set<URLResourceKey> = [.isDirectoryKey]
-        guard let enumerator = FileManager.default.enumerator(
-            at: directory.url,
-            includingPropertiesForKeys: Array(keys),
-            options: [.skipsPackageDescendants]
-        ) else {
-            return []
+        var targets: [WorkspaceTarget] = []
+
+        // Case 1: the added directory itself is a worktree that has .claude/plans
+        let directPlansURL = directory.url
+            .appendingPathComponent(".claude", isDirectory: true)
+            .appendingPathComponent("plans", isDirectory: true)
+        if let values = try? directPlansURL.resourceValues(forKeys: keys), values.isDirectory == true {
+            targets.append(WorkspaceTarget(name: directory.name, url: directPlansURL))
         }
 
-        var targets: [WorkspaceTarget] = []
-        for case let candidateURL as URL in enumerator {
-            guard candidateURL.lastPathComponent == ".claude" else { continue }
+        // Case 2: the added directory is a parent containing multiple worktrees
+        guard let childURLs = try? FileManager.default.contentsOfDirectory(
+            at: directory.url,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsPackageDescendants, .skipsHiddenFiles]
+        ) else {
+            return targets
+        }
 
-            let plansURL = candidateURL.appendingPathComponent("plans", isDirectory: true)
-            let values = try? plansURL.resourceValues(forKeys: keys)
-            guard values?.isDirectory == true else {
-                enumerator.skipDescendants()
-                continue
-            }
+        for childURL in childURLs {
+            let childValues = try? childURL.resourceValues(forKeys: keys)
+            guard childValues?.isDirectory == true else { continue }
 
-            let worktreeName = candidateURL.deletingLastPathComponent().lastPathComponent
-            let targetName = worktreeName == directory.name ? directory.name : "\(directory.name) / \(worktreeName)"
-            targets.append(WorkspaceTarget(name: targetName, url: plansURL))
-            enumerator.skipDescendants()
+            let plansURL = childURL
+                .appendingPathComponent(".claude", isDirectory: true)
+                .appendingPathComponent("plans", isDirectory: true)
+            let plansValues = try? plansURL.resourceValues(forKeys: keys)
+            guard plansValues?.isDirectory == true else { continue }
+
+            let worktreeName = childURL.lastPathComponent
+            targets.append(WorkspaceTarget(name: "\(directory.name) / \(worktreeName)", url: plansURL))
         }
 
         return dedupe(targets)

@@ -76,8 +76,13 @@ final class AppModel: ObservableObject {
     func addWorkspace(path: String, name: String?) {
         let expanded = (path as NSString).expandingTildeInPath
         guard !expanded.isEmpty else { return }
-        guard FileManager.default.fileExists(atPath: expanded) else {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: expanded, isDirectory: &isDirectory) else {
             errorMessage = "Directory does not exist: \(path)"
+            return
+        }
+        guard isDirectory.boolValue else {
+            errorMessage = "Selected path is not a directory: \(path)"
             return
         }
         if workspaceConfiguration.extraDirectories.contains(where: { $0.url.standardizedFileURL.path == URL(fileURLWithPath: expanded).standardizedFileURL.path }) {

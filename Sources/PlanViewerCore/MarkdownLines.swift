@@ -17,12 +17,14 @@ public struct MarkdownLine: Hashable, Sendable, Identifiable {
     public let lineNumber: Int
     public let rawText: String
     public let kind: MarkdownLineKind
+    public let attributedContent: AttributedString?
 
-    public init(lineNumber: Int, rawText: String, kind: MarkdownLineKind) {
+    public init(lineNumber: Int, rawText: String, kind: MarkdownLineKind, attributedContent: AttributedString? = nil) {
         self.id = lineNumber
         self.lineNumber = lineNumber
         self.rawText = rawText
         self.kind = kind
+        self.attributedContent = attributedContent
     }
 }
 
@@ -88,7 +90,34 @@ public struct MarkdownLineParser: Sendable {
             result.append(MarkdownLine(lineNumber: lineNumber, rawText: rawLine, kind: .paragraph(text: rawLine)))
         }
 
-        return result
+        return result.map { line in
+            MarkdownLine(
+                lineNumber: line.lineNumber,
+                rawText: line.rawText,
+                kind: line.kind,
+                attributedContent: attributedContent(for: line.kind)
+            )
+        }
+    }
+
+    private func attributedContent(for kind: MarkdownLineKind) -> AttributedString? {
+        let text: String
+        switch kind {
+        case .heading(_, let t): text = t
+        case .paragraph(let t): text = t
+        case .blockquote(let t): text = t
+        case .bullet(let t, _): text = t
+        case .ordered(_, let t): text = t
+        case .empty, .divider, .codeFence, .code: return nil
+        }
+#if canImport(AppKit)
+        return try? AttributedString(
+            markdown: text,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )
+#else
+        return nil
+#endif
     }
 
     private func headingKind(from line: String) -> MarkdownLineKind? {

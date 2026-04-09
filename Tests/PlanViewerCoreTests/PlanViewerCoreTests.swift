@@ -45,6 +45,20 @@ import Testing
     #expect(lines[5].kind == .blockquote(text: "note"))
 }
 
+@Test func markdownParserPrecomputesAttributedContent() {
+    let parser = MarkdownLineParser()
+    let lines = parser.parse("# Title\n```swift\nlet x = 1\n```")
+
+    // Non-text kinds never get attributed content regardless of platform
+    #expect(lines[1].attributedContent == nil)  // codeFence
+    #expect(lines[2].attributedContent == nil)  // code
+
+#if canImport(AppKit)
+    // Text-containing kinds get pre-computed attributed content on macOS
+    #expect(lines[0].attributedContent != nil)  // heading
+#endif
+}
+
 @Test func planScannerFindsMarkdownRecursively() throws {
     let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -84,6 +98,25 @@ import Testing
     #expect(documents.count == 2)
     #expect(Set(documents.map(\.displayName)) == ["alpha", "beta"])
     #expect(Set(documents.map(\.workspaceName)) == ["Worktrees / feature-a", "Worktrees / feature-b"])
+}
+
+@Test func planScannerFindsSingleWorktreeDirectClaudePlans() throws {
+    let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let worktree = root.appendingPathComponent("my-worktree", isDirectory: true)
+    let plans = worktree.appendingPathComponent(".claude/plans", isDirectory: true)
+    try FileManager.default.createDirectory(at: plans, withIntermediateDirectories: true)
+    try "# Plan".write(to: plans.appendingPathComponent("plan.md"), atomically: true, encoding: .utf8)
+
+    let scanner = PlanScanner()
+    let documents = scanner.scan(configuration: WorkspaceConfiguration(extraDirectories: [
+        WorkspaceDirectory(name: "my-worktree", path: worktree.path)
+    ]))
+
+    #expect(documents.count == 1)
+    #expect(documents.first?.displayName == "plan")
+    #expect(documents.first?.workspaceName == "my-worktree")
 }
 
 @Test func commentStorePersistsPerPlan() throws {

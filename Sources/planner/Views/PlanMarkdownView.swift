@@ -9,7 +9,6 @@ struct PlanMarkdownView: View {
 
     @State private var lines: [MarkdownLine] = []
     @State private var showingPromptPreview = false
-    private let parser = MarkdownLineParser()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -109,8 +108,19 @@ struct PlanMarkdownView: View {
     }
 
     private func loadLines() {
-        let contents = (try? plan.loadContents()) ?? ""
-        lines = parser.parse(contents)
+        let plan = self.plan
+        Task.detached(priority: .userInitiated) {
+            let parsedLines: [MarkdownLine]
+            do {
+                let contents = try plan.loadContents()
+                parsedLines = MarkdownLineParser().parse(contents)
+            } catch {
+                parsedLines = []
+            }
+            await MainActor.run {
+                lines = parsedLines
+            }
+        }
     }
 
     private func select(lineNumber: Int) {
@@ -159,26 +169,26 @@ private struct MarkdownLineRow: View {
         case .divider:
             Divider().padding(.vertical, 8)
         case .heading(let level, let text):
-            inlineText(text)
+            renderedText(text)
                 .font(font(forHeadingLevel: level))
         case .paragraph(let text):
-            inlineText(text)
+            renderedText(text)
         case .blockquote(let text):
             HStack(spacing: 10) {
                 Rectangle().fill(Color.accentColor).frame(width: 3)
-                inlineText(text).foregroundStyle(.secondary)
+                renderedText(text).foregroundStyle(.secondary)
             }
         case .bullet(let text, let checked):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(bulletSymbol(for: checked))
                     .font(.body.weight(.semibold))
-                inlineText(text)
+                renderedText(text)
             }
         case .ordered(let index, let text):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("\(index).")
                     .font(.body.weight(.semibold))
-                inlineText(text)
+                renderedText(text)
             }
         case .codeFence(let language):
             Text(language.map { "Code block (\($0))" } ?? "Code block")
@@ -197,14 +207,11 @@ private struct MarkdownLineRow: View {
         }
     }
 
-    private func inlineText(_ source: String) -> Text {
-        if let attributed = try? AttributedString(
-            markdown: source,
-            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
+    private func renderedText(_ fallback: String) -> Text {
+        if let attributed = line.attributedContent {
             return Text(attributed)
         }
-        return Text(source)
+        return Text(fallback)
     }
 
     private func font(forHeadingLevel level: Int) -> Font {

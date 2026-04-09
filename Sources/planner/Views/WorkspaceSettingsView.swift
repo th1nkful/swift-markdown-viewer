@@ -57,12 +57,7 @@ struct WorkspaceSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                TextEditor(text: Binding(get: {
-                    promptTemplate
-                }, set: { newValue in
-                    promptTemplate = newValue
-                    appModel.updatePromptTemplate(newValue)
-                }))
+                TextEditor(text: $promptTemplate)
                 .font(.system(.body, design: .monospaced))
                 .frame(minHeight: 120)
                 .padding(8)
@@ -100,6 +95,9 @@ struct WorkspaceSettingsView: View {
         .padding(20)
         .onAppear {
             promptTemplate = appModel.workspaceConfiguration.promptTemplate ?? PlanPromptBuilder.defaultTemplate
+        }
+        .onDisappear {
+            appModel.updatePromptTemplate(promptTemplate)
         }
     }
 
