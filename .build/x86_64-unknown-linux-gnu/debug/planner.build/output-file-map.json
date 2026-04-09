@@ -1,0 +1,61 @@
+{
+  "": {
+    "swift-dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/primary.swiftdeps"
+  },
+  "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/Sources/planner/AppModel.swift": {
+    "dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/AppModel.d",
+    "object": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/AppModel.swift.o",
+    "swiftmodule": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/AppModel~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/AppModel.swiftdeps",
+    "diagnostics": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/AppModel.dia"
+  },
+  "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/Sources/planner/PlannerMacApp.swift": {
+    "dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/PlannerMacApp.d",
+    "object": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/PlannerMacApp.swift.o",
+    "swiftmodule": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/PlannerMacApp~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/PlannerMacApp.swiftdeps",
+    "diagnostics": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/PlannerMacApp.dia"
+  },
+  "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/Sources/planner/Views/CommentsPanelView.swift": {
+    "dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/CommentsPanelView.d",
+    "object": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/CommentsPanelView.swift.o",
+    "swiftmodule": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/CommentsPanelView~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/CommentsPanelView.swiftdeps",
+    "diagnostics": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/CommentsPanelView.dia"
+  },
+  "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/Sources/planner/Views/ContentView.swift": {
+    "dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/ContentView.d",
+    "object": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/ContentView.swift.o",
+    "swiftmodule": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/ContentView~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/ContentView.swiftdeps",
+    "diagnostics": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/ContentView.dia"
+  },
+  "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/Sources/planner/Views/PlanMarkdownView.swift": {
+    "dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/PlanMarkdownView.d",
+    "object": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/PlanMarkdownView.swift.o",
+    "swiftmodule": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/PlanMarkdownView~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/PlanMarkdownView.swiftdeps",
+    "diagnostics": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/PlanMarkdownView.dia"
+  },
+  "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/Sources/planner/Views/SidebarView.swift": {
+    "dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/SidebarView.d",
+    "object": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/SidebarView.swift.o",
+    "swiftmodule": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/SidebarView~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/SidebarView.swiftdeps",
+    "diagnostics": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/SidebarView.dia"
+  },
+  "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/Sources/planner/Views/WorkspaceSettingsView.swift": {
+    "dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/WorkspaceSettingsView.d",
+    "object": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/WorkspaceSettingsView.swift.o",
+    "swiftmodule": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/WorkspaceSettingsView~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/WorkspaceSettingsView.swiftdeps",
+    "diagnostics": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/WorkspaceSettingsView.dia"
+  },
+  "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/Sources/planner/main.swift": {
+    "dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/main.d",
+    "object": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/main.swift.o",
+    "swiftmodule": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/main~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/main.swiftdeps",
+    "diagnostics": "/home/runner/work/swift-markdown-viewer/swift-markdown-viewer/.build/x86_64-unknown-linux-gnu/debug/planner.build/main.dia"
+  }
+}

@@ -1,0 +1,170 @@
+#if canImport(AppKit) && canImport(SwiftUI)
+import AppKit
+import Foundation
+import SwiftUI
+import PlanViewerCore
+
+@MainActor
+final class AppModel: ObservableObject {
+    @Published var workspaceConfiguration: WorkspaceConfiguration
+    @Published var plans: [PlanDocument] = []
+    @Published var selectedPlan: PlanDocument?
+    @Published var comments: [PlanComment] = []
+    @Published var selectedRange: ClosedRange<Int>?
+    @Published var fileCommentDraft = ""
+    @Published var inlineCommentDraft = ""
+    @Published var errorMessage: String?
+
+    private let scanner = PlanScanner()
+    private let promptBuilder = PlanPromptBuilder()
+    private let workspaceStore: WorkspaceStore
+    private let commentStore: CommentStore
+    private let startupArgument: PlannerLaunchArgument
+
+    init(startupArgument: PlannerLaunchArgument) {
+        self.startupArgument = startupArgument
+        let supportDirectory = AppModel.applicationSupportDirectory()
+        self.workspaceStore = WorkspaceStore(fileURL: supportDirectory.appendingPathComponent("workspaces.json"))
+        self.commentStore = CommentStore(fileURL: supportDirectory.appendingPathComponent("comments.json"))
+        self.workspaceConfiguration = workspaceStore.load()
+        reloadPlans(selecting: startupArgument.fileURL)
+    }
+
+    func reloadPlans(selecting preferredURL: URL? = nil) {
+        plans = scanner.scan(configuration: workspaceConfiguration)
+
+        if let preferredURL {
+            let standardized = preferredURL.standardizedFileURL
+            if let existing = plans.first(where: { $0.url.standardizedFileURL == standardized }) {
+                selectPlan(existing)
+                return
+            }
+            if FileManager.default.fileExists(atPath: standardized.path) {
+                let document = PlanDocument(url: standardized, workspaceName: standardized.deletingLastPathComponent().lastPathComponent, workspaceURL: standardized.deletingLastPathComponent(), modifiedAt: (try? standardized.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+                plans.insert(document, at: 0)
+                selectPlan(document)
+                return
+            }
+        }
+
+        if let selectedPlan,
+           let refreshed = plans.first(where: { $0.id == selectedPlan.id }) {
+            selectPlan(refreshed)
+        } else if let first = plans.first {
+            selectPlan(first)
+        } else {
+            selectedPlan = nil
+            comments = []
+            selectedRange = nil
+        }
+    }
+
+    func selectPlan(_ plan: PlanDocument?) {
+        selectedPlan = plan
+        selectedRange = nil
+        fileCommentDraft = ""
+        inlineCommentDraft = ""
+        guard let plan else {
+            comments = []
+            return
+        }
+        comments = commentStore.loadComments(for: plan.url.path)
+    }
+
+    func addWorkspace(path: String, name: String?) {
+        let expanded = (path as NSString).expandingTildeInPath
+        guard !expanded.isEmpty else { return }
+        guard FileManager.default.fileExists(atPath: expanded) else {
+            errorMessage = "Directory does not exist: \(path)"
+            return
+        }
+        if workspaceConfiguration.extraDirectories.contains(where: { $0.url.standardizedFileURL.path == URL(fileURLWithPath: expanded).standardizedFileURL.path }) {
+            return
+        }
+
+        workspaceConfiguration.extraDirectories.append(WorkspaceDirectory(name: name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty, path: path))
+        persistWorkspaceConfiguration()
+        reloadPlans()
+    }
+
+    func removeWorkspaces(at offsets: IndexSet) {
+        workspaceConfiguration.extraDirectories.remove(atOffsets: offsets)
+        persistWorkspaceConfiguration()
+        reloadPlans()
+    }
+
+    func addFileComment() {
+        guard let plan = selectedPlan else { return }
+        let trimmed = fileCommentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        comments.append(PlanComment(anchor: .file, text: trimmed))
+        persistComments(for: plan)
+        fileCommentDraft = ""
+    }
+
+    func addInlineComment() {
+        guard let plan = selectedPlan, let range = selectedRange else { return }
+        let trimmed = inlineCommentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        comments.append(PlanComment(anchor: .lineRange(start: range.lowerBound, end: range.upperBound), text: trimmed))
+        persistComments(for: plan)
+        inlineCommentDraft = ""
+        selectedRange = nil
+    }
+
+    func deleteComments(at offsets: IndexSet) {
+        guard let plan = selectedPlan else { return }
+        comments.remove(atOffsets: offsets)
+        persistComments(for: plan)
+    }
+
+    func copyPrompt() {
+        let prompt = promptBuilder.buildPrompt(for: comments)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(prompt, forType: .string)
+    }
+
+    func promptPreview() -> String {
+        promptBuilder.buildPrompt(for: comments)
+    }
+
+    func commentedLines() -> Set<Int> {
+        Set(comments.flatMap { comment -> [Int] in
+            guard case .lineRange(let start, let end) = comment.anchor else { return [] }
+            return Array(start...end)
+        })
+    }
+
+    private func persistWorkspaceConfiguration() {
+        do {
+            try workspaceStore.save(workspaceConfiguration)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func persistComments(for plan: PlanDocument) {
+        do {
+            try commentStore.saveComments(comments, for: plan.url.path)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private static func applicationSupportDirectory() -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        let directory = base.appendingPathComponent("swift-markdown-viewer", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
+}
+#endif
