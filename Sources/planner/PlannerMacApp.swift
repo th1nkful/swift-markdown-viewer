@@ -3,6 +3,11 @@ import AppKit
 import SwiftUI
 import PlanViewerCore
 
+private enum PlannerWindowSize {
+    static let settingsWidth: CGFloat = 520
+    static let settingsHeight: CGFloat = 360
+}
+
 @main
 struct PlannerMacApp: App {
     @StateObject private var appModel = AppModel(startupArgument: PlannerLaunchArgument.current)
@@ -17,7 +22,7 @@ struct PlannerMacApp: App {
         Settings {
             WorkspaceSettingsView()
                 .environmentObject(appModel)
-                .frame(width: 520, height: 360)
+                .frame(width: PlannerWindowSize.settingsWidth, height: PlannerWindowSize.settingsHeight)
         }
     }
 }

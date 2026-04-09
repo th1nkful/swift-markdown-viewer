@@ -86,14 +86,7 @@ struct PlanMarkdownView: View {
     }
 
     private func select(lineNumber: Int) {
-        if let current = appModel.selectedRange,
-           NSApp.currentEvent?.modifierFlags.contains(.shift) == true {
-            let start = min(current.lowerBound, lineNumber)
-            let end = max(current.lowerBound, lineNumber)
-            appModel.selectedRange = start...end
-        } else {
-            appModel.selectedRange = lineNumber...lineNumber
-        }
+        appModel.selectLine(lineNumber, extendingSelection: NSApp.currentEvent?.modifierFlags.contains(.shift) == true)
     }
 }
 

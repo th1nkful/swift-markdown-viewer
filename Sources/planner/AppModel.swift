@@ -20,6 +20,7 @@ final class AppModel: ObservableObject {
     private let workspaceStore: WorkspaceStore
     private let commentStore: CommentStore
     private let startupArgument: PlannerLaunchArgument
+    private(set) var selectionAnchorLine: Int?
 
     init(startupArgument: PlannerLaunchArgument) {
         self.startupArgument = startupArgument
@@ -62,6 +63,7 @@ final class AppModel: ObservableObject {
     func selectPlan(_ plan: PlanDocument?) {
         selectedPlan = plan
         selectedRange = nil
+        selectionAnchorLine = nil
         fileCommentDraft = ""
         inlineCommentDraft = ""
         guard let plan else {
@@ -110,6 +112,7 @@ final class AppModel: ObservableObject {
         persistComments(for: plan)
         inlineCommentDraft = ""
         selectedRange = nil
+        selectionAnchorLine = nil
     }
 
     func deleteComments(at offsets: IndexSet) {
@@ -135,6 +138,17 @@ final class AppModel: ObservableObject {
         })
     }
 
+    func selectLine(_ lineNumber: Int, extendingSelection: Bool) {
+        if extendingSelection, let anchor = selectionAnchorLine {
+            let start = min(anchor, lineNumber)
+            let end = max(anchor, lineNumber)
+            selectedRange = start...end
+        } else {
+            selectionAnchorLine = lineNumber
+            selectedRange = lineNumber...lineNumber
+        }
+    }
+
     private func persistWorkspaceConfiguration() {
         do {
             try workspaceStore.save(workspaceConfiguration)
@@ -156,7 +170,7 @@ final class AppModel: ObservableObject {
     private static func applicationSupportDirectory() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        let directory = base.appendingPathComponent("swift-markdown-viewer", isDirectory: true)
+        let directory = base.appendingPathComponent("planner", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
