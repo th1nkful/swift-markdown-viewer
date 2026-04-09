@@ -121,6 +121,12 @@ final class AppModel: ObservableObject {
         persistComments(for: plan)
     }
 
+    func deleteComment(id: UUID) {
+        guard let plan = selectedPlan else { return }
+        comments.removeAll { $0.id == id }
+        persistComments(for: plan)
+    }
+
     func copyPrompt() {
         let prompt = promptBuilder.buildPrompt(for: comments)
         NSPasteboard.general.clearContents()
@@ -129,6 +135,20 @@ final class AppModel: ObservableObject {
 
     func promptPreview() -> String {
         promptBuilder.buildPrompt(for: comments)
+    }
+
+    func fileComments() -> [PlanComment] {
+        comments.filter {
+            if case .file = $0.anchor { return true }
+            return false
+        }
+    }
+
+    func inlineComments(endingAt lineNumber: Int) -> [PlanComment] {
+        comments.filter {
+            guard case .lineRange(_, let end) = $0.anchor else { return false }
+            return end == lineNumber
+        }
     }
 
     func commentedLines() -> Set<Int> {

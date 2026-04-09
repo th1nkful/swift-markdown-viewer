@@ -9,14 +9,12 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             SidebarView(showingSettings: $showingSettings)
-        } content: {
+        } detail: {
             if let plan = appModel.selectedPlan {
                 PlanMarkdownView(plan: plan)
             } else {
                 ContentUnavailableView("No Plan Selected", systemImage: "doc.text")
             }
-        } detail: {
-            CommentsPanelView()
         }
         .navigationTitle("Planner")
         .toolbar {

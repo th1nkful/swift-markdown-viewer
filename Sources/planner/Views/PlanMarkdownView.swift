@@ -8,6 +8,7 @@ struct PlanMarkdownView: View {
     let plan: PlanDocument
 
     @State private var lines: [MarkdownLine] = []
+    @State private var showingPromptPreview = false
     private let parser = MarkdownLineParser()
 
     var body: some View {
@@ -18,15 +19,43 @@ struct PlanMarkdownView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(lines) { line in
-                            MarkdownLineRow(
-                                line: line,
-                                isSelected: appModel.selectedRange?.contains(line.lineNumber) == true,
-                                hasComment: appModel.commentedLines().contains(line.lineNumber)
-                            ) {
-                                select(lineNumber: line.lineNumber)
+                            VStack(alignment: .leading, spacing: 0) {
+                                MarkdownLineRow(
+                                    line: line,
+                                    isSelected: appModel.selectedRange?.contains(line.lineNumber) == true,
+                                    hasComment: appModel.commentedLines().contains(line.lineNumber)
+                                ) {
+                                    select(lineNumber: line.lineNumber)
+                                }
+                                .id(line.lineNumber)
+
+                                ForEach(appModel.inlineComments(endingAt: line.lineNumber)) { comment in
+                                    CommentCard(comment: comment, onDelete: { appModel.deleteComment(id: comment.id) })
+                                        .padding(.leading, 78)
+                                        .padding(.trailing, 16)
+                                        .padding(.bottom, 8)
+                                }
+
+                                if appModel.selectedRange?.upperBound == line.lineNumber {
+                                    InlineCommentComposer(range: appModel.selectedRange, draft: $appModel.inlineCommentDraft) {
+                                        appModel.addInlineComment()
+                                    }
+                                    .padding(.leading, 78)
+                                    .padding(.trailing, 16)
+                                    .padding(.bottom, 10)
+                                }
                             }
-                            .id(line.lineNumber)
                         }
+
+                        FileCommentsSection(
+                            comments: appModel.fileComments(),
+                            draft: $appModel.fileCommentDraft,
+                            onAdd: { appModel.addFileComment() },
+                            onDelete: { appModel.deleteComment(id: $0) }
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.top, 20)
+                        .padding(.bottom, 28)
                     }
                 }
                 .background(Color(nsColor: .textBackgroundColor))
@@ -40,6 +69,9 @@ struct PlanMarkdownView: View {
                     loadLines()
                 }
             }
+        }
+        .sheet(isPresented: $showingPromptPreview) {
+            PromptPreviewSheet(prompt: appModel.promptPreview())
         }
     }
 
@@ -57,23 +89,19 @@ struct PlanMarkdownView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if let range = appModel.selectedRange {
-                    Label(range.lowerBound == range.upperBound ? "Selected L\(range.lowerBound)" : "Selected L\(range.lowerBound)-L\(range.upperBound)", systemImage: "text.line.first.and.arrowtriangle.forward")
-                        .font(.footnote.weight(.medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.quaternary, in: Capsule())
-                }
-            }
-
-            if appModel.selectedRange != nil {
-                HStack(spacing: 12) {
-                    TextField("Inline feedback for selected lines", text: $appModel.inlineCommentDraft, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Add Inline Comment") {
-                        appModel.addInlineComment()
+                HStack(spacing: 8) {
+                    if let range = appModel.selectedRange {
+                        Label(range.lowerBound == range.upperBound ? "Selected L\(range.lowerBound)" : "Selected L\(range.lowerBound)-L\(range.upperBound)", systemImage: "text.line.first.and.arrowtriangle.forward")
+                            .font(.footnote.weight(.medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.quaternary, in: Capsule())
                     }
-                    .buttonStyle(.borderedProminent)
+                    SplitCopyButton(canCopy: !appModel.comments.isEmpty, onCopy: {
+                        appModel.copyPrompt()
+                    }, onPreview: {
+                        showingPromptPreview = true
+                    })
                 }
             }
         }
@@ -195,6 +223,167 @@ private struct MarkdownLineRow: View {
         case false: return "☐"
         case nil: return "•"
         }
+    }
+}
+
+private struct InlineCommentComposer: View {
+    let range: ClosedRange<Int>?
+    @Binding var draft: String
+    let onAdd: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            HStack(alignment: .top, spacing: 12) {
+                TextField("Inline feedback for selected lines", text: $draft, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                Button("Add Inline Comment") {
+                    onAdd()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(12)
+        .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var title: String {
+        guard let range else { return "Inline feedback" }
+        return range.lowerBound == range.upperBound ? "Inline feedback for L\(range.lowerBound)" : "Inline feedback for L\(range.lowerBound)-L\(range.upperBound)"
+    }
+}
+
+private struct FileCommentsSection: View {
+    let comments: [PlanComment]
+    @Binding var draft: String
+    let onAdd: () -> Void
+    let onDelete: (UUID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Divider()
+            Text("File feedback")
+                .font(.title3.weight(.semibold))
+
+            if comments.isEmpty {
+                Text("No file-level feedback yet.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(comments) { comment in
+                        CommentCard(comment: comment, onDelete: { onDelete(comment.id) })
+                    }
+                }
+            }
+
+            TextField("Overall feedback for this plan", text: $draft, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+            Button("Add File Comment") {
+                onAdd()
+            }
+            .buttonStyle(.bordered)
+            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+}
+
+private struct CommentCard: View {
+    let comment: PlanComment
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+            }
+            Text(comment.text)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var title: String {
+        switch comment.anchor {
+        case .file:
+            return "File feedback"
+        case .lineRange(let start, let end):
+            return start == end ? "Line \(start)" : "Lines \(start)-\(end)"
+        }
+    }
+}
+
+private struct SplitCopyButton: View {
+    let canCopy: Bool
+    let onCopy: () -> Void
+    let onPreview: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button("Copy Prompt") {
+                onCopy()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!canCopy)
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 8))
+
+            Menu {
+                Button("Preview Prompt") {
+                    onPreview()
+                }
+                .disabled(!canCopy)
+            } label: {
+                Image(systemName: "chevron.down")
+                    .frame(width: 28)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .padding(.leading, -1)
+            .disabled(!canCopy)
+        }
+    }
+}
+
+private struct PromptPreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let prompt: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Prompt Preview")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Button("Done") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            ScrollView {
+                Text(prompt.isEmpty ? "No feedback yet." : prompt)
+                    .textSelection(.enabled)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+            }
+            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 640, minHeight: 420)
     }
 }
 #endif
