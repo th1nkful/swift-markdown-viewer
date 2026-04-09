@@ -32,7 +32,7 @@ final class AppModel: ObservableObject {
     }
 
     func reloadPlans(selecting preferredURL: URL? = nil) {
-        plans = scanner.scan(configuration: workspaceConfiguration)
+        plans = scanner.scan()
 
         if let preferredURL {
             let standardized = preferredURL.standardizedFileURL
@@ -57,56 +57,29 @@ final class AppModel: ObservableObject {
             selectedPlan = nil
             comments = []
             selectedRange = nil
+            fileCommentDraft = ""
         }
     }
 
     func selectPlan(_ plan: PlanDocument?) {
+        if let currentPlan = selectedPlan {
+            syncFileComment()
+            persistComments(for: currentPlan)
+        }
+
         selectedPlan = plan
         selectedRange = nil
         selectionAnchorLine = nil
-        fileCommentDraft = ""
         inlineCommentDraft = ""
         guard let plan else {
             comments = []
+            fileCommentDraft = ""
             return
         }
         comments = commentStore.loadComments(for: plan.url.path)
-    }
-
-    func addWorkspace(path: String, name: String?) {
-        let expanded = (path as NSString).expandingTildeInPath
-        guard !expanded.isEmpty else { return }
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: expanded, isDirectory: &isDirectory) else {
-            errorMessage = "Directory does not exist: \(path)"
-            return
-        }
-        guard isDirectory.boolValue else {
-            errorMessage = "Selected path is not a directory: \(path)"
-            return
-        }
-        if workspaceConfiguration.extraDirectories.contains(where: { $0.url.standardizedFileURL.path == URL(fileURLWithPath: expanded).standardizedFileURL.path }) {
-            return
-        }
-
-        workspaceConfiguration.extraDirectories.append(WorkspaceDirectory(name: name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty, path: path))
-        persistWorkspaceConfiguration()
-        reloadPlans()
-    }
-
-    func removeWorkspaces(at offsets: IndexSet) {
-        workspaceConfiguration.extraDirectories.remove(atOffsets: offsets)
-        persistWorkspaceConfiguration()
-        reloadPlans()
-    }
-
-    func addFileComment() {
-        guard let plan = selectedPlan else { return }
-        let trimmed = fileCommentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        comments.append(PlanComment(anchor: .file, text: trimmed))
-        persistComments(for: plan)
-        fileCommentDraft = ""
+        fileCommentDraft = comments
+            .compactMap { if case .file = $0.anchor { return $0.text } else { return nil } }
+            .joined(separator: "\n\n")
     }
 
     func addInlineComment() {
@@ -132,14 +105,22 @@ final class AppModel: ObservableObject {
         persistComments(for: plan)
     }
 
+    func persistFileComment() {
+        guard let plan = selectedPlan else { return }
+        syncFileComment()
+        persistComments(for: plan)
+    }
+
     func copyPrompt() {
+        syncFileComment()
         let prompt = promptBuilder.buildPrompt(for: comments, template: workspaceConfiguration.promptTemplate)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(prompt, forType: .string)
     }
 
     func promptPreview() -> String {
-        promptBuilder.buildPrompt(for: comments, template: workspaceConfiguration.promptTemplate)
+        syncFileComment()
+        return promptBuilder.buildPrompt(for: comments, template: workspaceConfiguration.promptTemplate)
     }
 
     func updatePromptTemplate(_ template: String) {
@@ -150,13 +131,6 @@ final class AppModel: ObservableObject {
     func resetPromptTemplate() {
         workspaceConfiguration.promptTemplate = nil
         persistWorkspaceConfiguration()
-    }
-
-    func fileComments() -> [PlanComment] {
-        comments.filter {
-            if case .file = $0.anchor { return true }
-            return false
-        }
     }
 
     func inlineComments(endingAt lineNumber: Int) -> [PlanComment] {
@@ -181,6 +155,14 @@ final class AppModel: ObservableObject {
         } else {
             selectionAnchorLine = lineNumber
             selectedRange = lineNumber...lineNumber
+        }
+    }
+
+    private func syncFileComment() {
+        comments.removeAll { if case .file = $0.anchor { return true }; return false }
+        let trimmed = fileCommentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            comments.append(PlanComment(anchor: .file, text: trimmed))
         }
     }
 

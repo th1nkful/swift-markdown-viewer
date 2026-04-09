@@ -9,6 +9,7 @@ struct PlanMarkdownView: View {
 
     @State private var lines: [MarkdownLine] = []
     @State private var showingPromptPreview = false
+    @State private var saveTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,8 +24,8 @@ struct PlanMarkdownView: View {
                                     line: line,
                                     isSelected: appModel.selectedRange?.contains(line.lineNumber) == true,
                                     hasComment: appModel.commentedLines().contains(line.lineNumber)
-                                ) {
-                                    select(lineNumber: line.lineNumber)
+                                ) { extending in
+                                    appModel.selectLine(line.lineNumber, extendingSelection: extending)
                                 }
                                 .id(line.lineNumber)
 
@@ -45,19 +46,12 @@ struct PlanMarkdownView: View {
                                 }
                             }
                         }
-
-                        FileCommentsSection(
-                            comments: appModel.fileComments(),
-                            draft: $appModel.fileCommentDraft,
-                            onAdd: { appModel.addFileComment() },
-                            onDelete: { appModel.deleteComment(id: $0) }
-                        )
-                        .padding(.horizontal, 16)
-                        .padding(.top, 20)
-                        .padding(.bottom, 28)
                     }
                 }
                 .background(Color(nsColor: .textBackgroundColor))
+                .safeAreaInset(edge: .bottom) {
+                    fileFeedbackBar
+                }
                 .onAppear {
                     loadLines()
                     if let line = appModel.selectedRange?.lowerBound {
@@ -75,40 +69,72 @@ struct PlanMarkdownView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(plan.displayName)
-                        .font(.title2.weight(.semibold))
-                    Text(plan.pathDisplay)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Text("Workspace: \(plan.workspaceName)")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                HStack(spacing: 8) {
-                    if let range = appModel.selectedRange {
-                        Label(range.lowerBound == range.upperBound ? "Selected L\(range.lowerBound)" : "Selected L\(range.lowerBound)-L\(range.upperBound)", systemImage: "text.line.first.and.arrowtriangle.forward")
-                            .font(.footnote.weight(.medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.quaternary, in: Capsule())
-                    }
-                    SplitCopyButton(canCopy: !appModel.comments.isEmpty, onCopy: {
-                        appModel.copyPrompt()
-                    }, onPreview: {
-                        showingPromptPreview = true
-                    })
-                }
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(plan.displayName)
+                    .font(.title2.weight(.semibold))
+                Text(plan.workspaceName)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if let range = appModel.selectedRange {
+                Label(
+                    range.lowerBound == range.upperBound
+                        ? "Selected L\(range.lowerBound)"
+                        : "Selected L\(range.lowerBound)-L\(range.upperBound)",
+                    systemImage: "text.line.first.and.arrowtriangle.forward"
+                )
+                .font(.footnote.weight(.medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.quaternary, in: Capsule())
             }
         }
         .padding(16)
     }
 
+    private var fileFeedbackBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("File feedback")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                CopyPromptButton(canCopy: hasAnyFeedback, onCopy: {
+                    appModel.copyPrompt()
+                }, onPreview: {
+                    showingPromptPreview = true
+                })
+            }
+            TextEditor(text: $appModel.fileCommentDraft)
+                .font(.body)
+                .frame(minHeight: 60, maxHeight: 120)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                }
+        }
+        .padding(12)
+        .glassBackground()
+        .onChange(of: appModel.fileCommentDraft) { _, _ in
+            saveTask?.cancel()
+            saveTask = Task {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                appModel.persistFileComment()
+            }
+        }
+    }
+
+    private var hasAnyFeedback: Bool {
+        !appModel.fileCommentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        appModel.comments.contains(where: { if case .lineRange = $0.anchor { return true }; return false })
+    }
+
     private func loadLines() {
-        // Capture plan value before entering the detached task to avoid capturing the view struct (self).
         let plan = self.plan
         Task.detached(priority: .userInitiated) {
             let parsedLines: [MarkdownLine]
@@ -123,21 +149,21 @@ struct PlanMarkdownView: View {
             }
         }
     }
-
-    private func select(lineNumber: Int) {
-        appModel.selectLine(lineNumber, extendingSelection: NSApp.currentEvent?.modifierFlags.contains(.shift) == true)
-    }
 }
+
+// MARK: - Line Row
 
 private struct MarkdownLineRow: View {
     let line: MarkdownLine
     let isSelected: Bool
     let hasComment: Bool
-    let onSelect: () -> Void
+    let onSelect: (_ extendingSelection: Bool) -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            Button(action: onSelect) {
+        Button {
+            onSelect(NSEvent.modifierFlags.contains(.shift))
+        } label: {
+            HStack(alignment: .top, spacing: 0) {
                 HStack(spacing: 6) {
                     Text("\(line.lineNumber)")
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
@@ -148,17 +174,18 @@ private struct MarkdownLineRow: View {
                 .frame(width: 64, alignment: .trailing)
                 .padding(.top, 6)
                 .padding(.trailing, 10)
-            }
-            .buttonStyle(.plain)
-            .background(Color(nsColor: .controlBackgroundColor))
+                .background(Color(nsColor: .controlBackgroundColor))
 
-            lineContent
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+                lineContent
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+            }
+            .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
+            .contentShape(Rectangle())
         }
-        .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -234,6 +261,8 @@ private struct MarkdownLineRow: View {
     }
 }
 
+// MARK: - Inline Comment Composer
+
 private struct InlineCommentComposer: View {
     let range: ClosedRange<Int>?
     @Binding var draft: String
@@ -243,10 +272,19 @@ private struct InlineCommentComposer: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
-            HStack(alignment: .top, spacing: 12) {
-                TextField("Inline feedback for selected lines", text: $draft, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                Button("Add Inline Comment") {
+            TextEditor(text: $draft)
+                .font(.body)
+                .frame(minHeight: 50, maxHeight: 100)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                }
+            HStack {
+                Spacer()
+                Button("Add Comment") {
                     onAdd()
                 }
                 .buttonStyle(.borderedProminent)
@@ -263,40 +301,7 @@ private struct InlineCommentComposer: View {
     }
 }
 
-private struct FileCommentsSection: View {
-    let comments: [PlanComment]
-    @Binding var draft: String
-    let onAdd: () -> Void
-    let onDelete: (UUID) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Divider()
-            Text("File feedback")
-                .font(.title3.weight(.semibold))
-
-            if comments.isEmpty {
-                Text("No file-level feedback yet.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(comments) { comment in
-                        CommentCard(comment: comment, onDelete: { onDelete(comment.id) })
-                    }
-                }
-            }
-
-            TextField("Overall feedback for this plan", text: $draft, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-            Button("Add File Comment") {
-                onAdd()
-            }
-            .buttonStyle(.bordered)
-            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-    }
-}
+// MARK: - Comment Card
 
 private struct CommentCard: View {
     let comment: PlanComment
@@ -330,38 +335,47 @@ private struct CommentCard: View {
     }
 }
 
-private struct SplitCopyButton: View {
+// MARK: - Copy Button
+
+private struct CopyPromptButton: View {
     let canCopy: Bool
     let onCopy: () -> Void
     let onPreview: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            Button("Copy Prompt") {
-                onCopy()
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!canCopy)
+        Menu {
+            Button("Copy Prompt") { onCopy() }
+            Button("Preview Prompt") { onPreview() }
+        } label: {
+            Label("Copy", systemImage: "doc.on.doc")
+        } primaryAction: {
+            onCopy()
+        }
+        .menuStyle(.button)
+        .buttonStyle(.borderedProminent)
+        .disabled(!canCopy)
+    }
+}
 
-            Menu {
-                Button("Copy Prompt") {
-                    onCopy()
-                }
-                .disabled(!canCopy)
+// MARK: - Glass Background
 
-                Button("Preview Prompt") {
-                    onPreview()
-                }
-                .disabled(!canCopy)
-            } label: {
-                Image(systemName: "chevron.down")
-                    .frame(width: 28, height: 28)
-            }
-            .menuStyle(.button)
-            .disabled(!canCopy)
+private struct GlassBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(.regular, in: .rect(cornerRadius: 12))
+        } else {
+            content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 }
+
+private extension View {
+    func glassBackground() -> some View {
+        modifier(GlassBackground())
+    }
+}
+
+// MARK: - Prompt Preview
 
 private struct PromptPreviewSheet: View {
     @Environment(\.dismiss) private var dismiss

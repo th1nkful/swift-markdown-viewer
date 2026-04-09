@@ -5,7 +5,7 @@ import PlanViewerCore
 
 private struct PlannerWindowSize {
     static let settingsWidth: CGFloat = 520
-    static let settingsHeight: CGFloat = 520
+    static let settingsHeight: CGFloat = 340
 
     private init() {}
 }
@@ -19,6 +19,10 @@ struct PlannerMacApp: App {
             ContentView()
                 .environmentObject(appModel)
                 .frame(minWidth: 1200, minHeight: 760)
+                .onAppear {
+                    NSApp.setActivationPolicy(.regular)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
         }
 
         Settings {

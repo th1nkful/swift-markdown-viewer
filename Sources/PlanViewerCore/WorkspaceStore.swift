@@ -1,11 +1,9 @@
 import Foundation
 
 public struct WorkspaceConfiguration: Codable, Hashable, Sendable {
-    public var extraDirectories: [WorkspaceDirectory]
     public var promptTemplate: String?
 
-    public init(extraDirectories: [WorkspaceDirectory] = [], promptTemplate: String? = nil) {
-        self.extraDirectories = extraDirectories
+    public init(promptTemplate: String? = nil) {
         self.promptTemplate = promptTemplate?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
     }
 }

@@ -13,23 +13,22 @@ public struct WorkspaceTarget: Hashable, Sendable {
 public struct PlanScanner: Sendable {
     public init() {}
 
-    public func defaultWorkspaceTargets(homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory())) -> [WorkspaceTarget] {
-        [WorkspaceTarget(name: "~/.claude/plans", url: homeDirectory.appendingPathComponent(".claude/plans", isDirectory: true))]
-    }
+    public func scan(homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory())) -> [PlanDocument] {
+        let mapping = buildGlobalPlanMapping(homeDirectory: homeDirectory)
 
-    public func workspaceTargets(homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory()), configuration: WorkspaceConfiguration) -> [WorkspaceTarget] {
-        let defaults = defaultWorkspaceTargets(homeDirectory: homeDirectory)
-        let extras = configuration.extraDirectories.flatMap { directory in
-            nestedClaudeTargets(in: directory)
-        }
-        return dedupe(defaults + extras)
-    }
-
-    public func scan(homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory()), configuration: WorkspaceConfiguration) -> [PlanDocument] {
-        workspaceTargets(homeDirectory: homeDirectory, configuration: configuration).flatMap(scanWorkspace)
+        return defaultWorkspaceTargets(homeDirectory: homeDirectory)
+            .flatMap(scanWorkspace)
+            .map { doc in
+                guard let projectName = mapping[doc.url.path] else { return doc }
+                return PlanDocument(url: doc.url, workspaceName: projectName, workspaceURL: doc.workspaceURL, modifiedAt: doc.modifiedAt)
+            }
             .sorted { lhs, rhs in
                 lhs.modifiedAt == rhs.modifiedAt ? lhs.url.path < rhs.url.path : lhs.modifiedAt > rhs.modifiedAt
             }
+    }
+
+    public func defaultWorkspaceTargets(homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory())) -> [WorkspaceTarget] {
+        [WorkspaceTarget(name: "~/.claude/plans", url: homeDirectory.appendingPathComponent(".claude/plans", isDirectory: true))]
     }
 
     public func scanWorkspace(_ target: WorkspaceTarget) -> [PlanDocument] {
@@ -41,10 +40,12 @@ public struct PlanScanner: Sendable {
         }
 
         var plans: [PlanDocument] = []
+        var seen = Set<String>()
         for case let fileURL as URL in enumerator {
             guard fileURL.pathExtension.lowercased() == "md" else { continue }
             let values = try? fileURL.resourceValues(forKeys: keys)
             guard values?.isRegularFile == true else { continue }
+            guard seen.insert(fileURL.standardizedFileURL.path).inserted else { continue }
             plans.append(PlanDocument(
                 url: fileURL,
                 workspaceName: target.name,
@@ -53,58 +54,125 @@ public struct PlanScanner: Sendable {
             ))
         }
 
-        return dedupe(plans)
+        return plans
     }
 
-    private func dedupe(_ targets: [WorkspaceTarget]) -> [WorkspaceTarget] {
-        var seen = Set<String>()
-        return targets.filter { seen.insert($0.url.standardizedFileURL.path).inserted }
-    }
+    // MARK: - Global Plan Mapping
 
-    private func dedupe(_ documents: [PlanDocument]) -> [PlanDocument] {
-        var seen = Set<String>()
-        return documents.filter { seen.insert($0.url.standardizedFileURL.path).inserted }
-    }
+    private func buildGlobalPlanMapping(homeDirectory: URL) -> [String: String] {
+        let projectsDir = homeDirectory.appendingPathComponent(".claude/projects", isDirectory: true)
+        guard let projectDirURLs = try? FileManager.default.contentsOfDirectory(
+            at: projectsDir,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [:] }
 
-    private func nestedClaudeTargets(in directory: WorkspaceDirectory) -> [WorkspaceTarget] {
-        let keys: Set<URLResourceKey> = [.isDirectoryKey]
-        var targets: [WorkspaceTarget] = []
+        let needle = Data("planFilePath".utf8)
+        var mapping: [String: String] = [:]
 
-        // Case 1: the added directory itself is a worktree that has .claude/plans
-        let directPlansURL = directory.url
-            .appendingPathComponent(".claude", isDirectory: true)
-            .appendingPathComponent("plans", isDirectory: true)
-        if let values = try? directPlansURL.resourceValues(forKeys: keys), values.isDirectory == true {
-            targets.append(WorkspaceTarget(name: directory.name, url: directPlansURL))
+        for projectDirURL in projectDirURLs {
+            guard (try? projectDirURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { continue }
+
+            guard let files = try? FileManager.default.contentsOfDirectory(
+                at: projectDirURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            let jsonlFiles = files.filter { $0.pathExtension == "jsonl" }
+            guard !jsonlFiles.isEmpty else { continue }
+
+            var projectName: String?
+            for file in jsonlFiles {
+                if let name = extractProjectName(from: file) {
+                    projectName = name
+                    break
+                }
+            }
+            guard let name = projectName else { continue }
+
+            for jsonlFile in jsonlFiles {
+                guard let data = try? Data(contentsOf: jsonlFile, options: .mappedIfSafe),
+                      data.range(of: needle) != nil,
+                      let content = String(data: data, encoding: .utf8) else { continue }
+
+                for planPath in extractPlanFilePaths(from: content) {
+                    mapping[planPath] = name
+                }
+            }
         }
 
-        // Case 2: the added directory is a parent containing multiple worktrees
-        guard let childURLs = try? FileManager.default.contentsOfDirectory(
-            at: directory.url,
-            includingPropertiesForKeys: Array(keys),
-            options: [.skipsPackageDescendants, .skipsHiddenFiles]
-        ) else {
-            return targets
-        }
-
-        for childURL in childURLs {
-            let childValues = try? childURL.resourceValues(forKeys: keys)
-            guard childValues?.isDirectory == true else { continue }
-
-            let plansURL = childURL
-                .appendingPathComponent(".claude", isDirectory: true)
-                .appendingPathComponent("plans", isDirectory: true)
-            let plansValues = try? plansURL.resourceValues(forKeys: keys)
-            guard plansValues?.isDirectory == true else { continue }
-
-            let worktreeName = childURL.lastPathComponent
-            targets.append(WorkspaceTarget(name: targetName(directory.name, worktree: worktreeName), url: plansURL))
-        }
-
-        return dedupe(targets)
+        return mapping
     }
 
-    private func targetName(_ workspaceName: String, worktree: String) -> String {
-        "\(workspaceName) / \(worktree)"
+    private func extractProjectName(from jsonlFile: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: jsonlFile) else { return nil }
+        defer { handle.closeFile() }
+
+        // Read enough to find a line with cwd (first line may be permission-mode, file-history-snapshot, etc.)
+        let data = handle.readData(ofLength: 65536)
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+
+        for line in text.split(separator: "\n", maxSplits: 20).prefix(20) {
+            guard let lineData = line.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  let cwd = json["cwd"] as? String, !cwd.isEmpty else { continue }
+            return gitRootName(for: cwd)
+        }
+        return nil
+    }
+
+    private func gitRootName(for cwd: String) -> String {
+        var current = URL(fileURLWithPath: cwd)
+        while current.path != "/" {
+            let gitPath = current.appendingPathComponent(".git")
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: gitPath.path, isDirectory: &isDirectory) {
+                if isDirectory.boolValue {
+                    return current.lastPathComponent
+                }
+                // Worktree: .git is a file pointing to the real repo
+                if let content = try? String(contentsOf: gitPath, encoding: .utf8),
+                   content.hasPrefix("gitdir: ") {
+                    let gitdir = String(content.dropFirst(8)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let gitdirURL: URL
+                    if gitdir.hasPrefix("/") {
+                        gitdirURL = URL(fileURLWithPath: gitdir)
+                    } else {
+                        gitdirURL = current.appendingPathComponent(gitdir).standardized
+                    }
+                    // Walk up from gitdir to find the .git directory, then its parent is the repo root
+                    var parent = gitdirURL
+                    while parent.lastPathComponent != ".git" && parent.path != "/" {
+                        parent = parent.deletingLastPathComponent()
+                    }
+                    if parent.lastPathComponent == ".git" {
+                        return parent.deletingLastPathComponent().lastPathComponent
+                    }
+                }
+                return current.lastPathComponent
+            }
+            current = current.deletingLastPathComponent()
+        }
+        return URL(fileURLWithPath: cwd).lastPathComponent
+    }
+
+    private func extractPlanFilePaths(from content: String) -> Set<String> {
+        var paths = Set<String>()
+        var searchStart = content.startIndex
+        let needle = "\"planFilePath\":\""
+
+        while searchStart < content.endIndex,
+              let range = content.range(of: needle, range: searchStart..<content.endIndex) {
+            let valueStart = range.upperBound
+            guard let endQuote = content[valueStart...].firstIndex(of: "\"") else { break }
+            let path = String(content[valueStart..<endQuote])
+            if !path.isEmpty {
+                paths.insert(path)
+            }
+            searchStart = endQuote
+        }
+
+        return paths
     }
 }

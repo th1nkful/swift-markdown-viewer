@@ -1,22 +1,5 @@
 import Foundation
 
-public struct WorkspaceDirectory: Codable, Hashable, Identifiable, Sendable {
-    public let id: UUID
-    public var name: String
-    public var path: String
-
-    public init(id: UUID = UUID(), name: String? = nil, path: String) {
-        self.id = id
-        self.path = path
-        let expanded = (path as NSString).expandingTildeInPath
-        self.name = name ?? URL(fileURLWithPath: expanded).lastPathComponent
-    }
-
-    public var url: URL {
-        URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
-    }
-}
-
 public struct PlanDocument: Identifiable, Hashable, Sendable {
     public let id: String
     public let url: URL

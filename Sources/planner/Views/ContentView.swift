@@ -28,7 +28,7 @@ struct ContentView: View {
                 Button {
                     showingSettings = true
                 } label: {
-                    Label("Workspaces", systemImage: "folder.badge.gearshape")
+                    Label("Settings", systemImage: "gearshape")
                 }
             }
         }
