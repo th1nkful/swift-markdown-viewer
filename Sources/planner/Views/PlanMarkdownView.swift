@@ -108,6 +108,7 @@ struct PlanMarkdownView: View {
     }
 
     private func loadLines() {
+        // Capture plan value before entering the detached task to avoid capturing the view struct (self).
         let plan = self.plan
         Task.detached(priority: .userInitiated) {
             let parsedLines: [MarkdownLine]

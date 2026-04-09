@@ -98,9 +98,13 @@ public struct PlanScanner: Sendable {
             guard plansValues?.isDirectory == true else { continue }
 
             let worktreeName = childURL.lastPathComponent
-            targets.append(WorkspaceTarget(name: "\(directory.name) / \(worktreeName)", url: plansURL))
+            targets.append(WorkspaceTarget(name: targetName(directory.name, worktree: worktreeName), url: plansURL))
         }
 
         return dedupe(targets)
+    }
+
+    private func targetName(_ workspaceName: String, worktree: String) -> String {
+        "\(workspaceName) / \(worktree)"
     }
 }
