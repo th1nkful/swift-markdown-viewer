@@ -65,9 +65,15 @@ public struct PlanComment: Codable, Hashable, Identifiable, Sendable {
 }
 
 public struct PlanPromptBuilder: Sendable {
+    public static let defaultTemplate = """
+    {{file_comments_section}}
+
+    {{inline_comments_section}}
+    """
+
     public init() {}
 
-    public func buildPrompt(for comments: [PlanComment]) -> String {
+    public func buildPrompt(for comments: [PlanComment], template: String? = nil) -> String {
         let fileComments = comments.compactMap { comment -> String? in
             guard case .file = comment.anchor else { return nil }
             let trimmed = comment.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -84,24 +90,42 @@ public struct PlanPromptBuilder: Sendable {
 
         guard !fileComments.isEmpty || !inlineComments.isEmpty else { return "" }
 
-        var parts: [String] = []
-        if !fileComments.isEmpty {
-            parts.append("Here is feedback on the plan:")
-            parts.append(fileComments.joined(separator: "\n\n"))
-        }
-
-        if !inlineComments.isEmpty {
-            if !parts.isEmpty { parts.append("") }
-            parts.append("Other feedback:")
-            for (start, end, text) in inlineComments {
-                if start == end {
-                    parts.append("Around L\(start): \(text)")
-                } else {
-                    parts.append("Around L\(start) to L\(end): \(text)")
-                }
+        let fileCommentsText = fileComments.joined(separator: "\n\n")
+        let inlineCommentsText = inlineComments.map { start, end, text in
+            if start == end {
+                return "Around L\(start): \(text)"
             }
+            return "Around L\(start) to L\(end): \(text)"
+        }.joined(separator: "\n")
+
+        let fileSection = fileCommentsText.isEmpty ? "" : """
+        Here is feedback on the plan:
+        \(fileCommentsText)
+        """
+
+        let inlineSection = inlineCommentsText.isEmpty ? "" : """
+        Other feedback:
+        \(inlineCommentsText)
+        """
+
+        let resolvedTemplate = template?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? template ?? Self.defaultTemplate
+            : Self.defaultTemplate
+
+        let prompt = resolvedTemplate
+            .replacingOccurrences(of: "{{file_comments_section}}", with: fileSection)
+            .replacingOccurrences(of: "{{inline_comments_section}}", with: inlineSection)
+            .replacingOccurrences(of: "{{file_comments}}", with: fileCommentsText)
+            .replacingOccurrences(of: "{{inline_comments}}", with: inlineCommentsText)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !prompt.isEmpty else { return "" }
+
+        if let whitespacePattern = try? NSRegularExpression(pattern: #"\n{3,}"#) {
+            let range = NSRange(prompt.startIndex..<prompt.endIndex, in: prompt)
+            return whitespacePattern.stringByReplacingMatches(in: prompt, options: [], range: range, withTemplate: "\n\n")
         }
 
-        return parts.joined(separator: "\n")
+        return prompt
     }
 }

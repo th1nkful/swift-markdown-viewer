@@ -5,7 +5,7 @@ import PlanViewerCore
 
 private struct PlannerWindowSize {
     static let settingsWidth: CGFloat = 520
-    static let settingsHeight: CGFloat = 360
+    static let settingsHeight: CGFloat = 520
 
     private init() {}
 }

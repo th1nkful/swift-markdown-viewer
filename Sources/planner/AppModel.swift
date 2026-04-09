@@ -128,13 +128,23 @@ final class AppModel: ObservableObject {
     }
 
     func copyPrompt() {
-        let prompt = promptBuilder.buildPrompt(for: comments)
+        let prompt = promptBuilder.buildPrompt(for: comments, template: workspaceConfiguration.promptTemplate)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(prompt, forType: .string)
     }
 
     func promptPreview() -> String {
-        promptBuilder.buildPrompt(for: comments)
+        promptBuilder.buildPrompt(for: comments, template: workspaceConfiguration.promptTemplate)
+    }
+
+    func updatePromptTemplate(_ template: String) {
+        workspaceConfiguration.promptTemplate = template.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        persistWorkspaceConfiguration()
+    }
+
+    func resetPromptTemplate() {
+        workspaceConfiguration.promptTemplate = nil
+        persistWorkspaceConfiguration()
     }
 
     func fileComments() -> [PlanComment] {

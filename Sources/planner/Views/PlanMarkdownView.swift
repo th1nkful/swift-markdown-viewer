@@ -328,26 +328,28 @@ private struct SplitCopyButton: View {
     let onPreview: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 6) {
             Button("Copy Prompt") {
                 onCopy()
             }
             .buttonStyle(.borderedProminent)
             .disabled(!canCopy)
-            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 8))
 
             Menu {
+                Button("Copy Prompt") {
+                    onCopy()
+                }
+                .disabled(!canCopy)
+
                 Button("Preview Prompt") {
                     onPreview()
                 }
                 .disabled(!canCopy)
             } label: {
                 Image(systemName: "chevron.down")
-                    .frame(width: 28)
+                    .frame(width: 28, height: 28)
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .padding(.leading, -1)
+            .menuStyle(.button)
             .disabled(!canCopy)
         }
     }

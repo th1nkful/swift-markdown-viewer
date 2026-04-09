@@ -8,6 +8,7 @@ struct WorkspaceSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var path = ""
+    @State private var promptTemplate = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -40,6 +41,38 @@ struct WorkspaceSettingsView: View {
                 }
             }
 
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Prompt Template")
+                        .font(.headline)
+                    Spacer()
+                    Button("Reset Default") {
+                        appModel.resetPromptTemplate()
+                        promptTemplate = appModel.workspaceConfiguration.promptTemplate ?? PlanPromptBuilder.defaultTemplate
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Text("Use placeholders to control copied and previewed prompts: {{file_comments_section}}, {{inline_comments_section}}, {{file_comments}}, {{inline_comments}}.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                TextEditor(text: Binding(get: {
+                    promptTemplate
+                }, set: { newValue in
+                    promptTemplate = newValue
+                    appModel.updatePromptTemplate(newValue)
+                }))
+                .font(.system(.body, design: .monospaced))
+                .frame(minHeight: 120)
+                .padding(8)
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                }
+            }
+
             List {
                 Section("Configured Directories") {
                     ForEach(appModel.workspaceConfiguration.extraDirectories) { directory in
@@ -65,6 +98,9 @@ struct WorkspaceSettingsView: View {
             }
         }
         .padding(20)
+        .onAppear {
+            promptTemplate = appModel.workspaceConfiguration.promptTemplate ?? PlanPromptBuilder.defaultTemplate
+        }
     }
 
     private func chooseDirectory() {

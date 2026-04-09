@@ -2,9 +2,11 @@ import Foundation
 
 public struct WorkspaceConfiguration: Codable, Hashable, Sendable {
     public var extraDirectories: [WorkspaceDirectory]
+    public var promptTemplate: String?
 
-    public init(extraDirectories: [WorkspaceDirectory] = []) {
+    public init(extraDirectories: [WorkspaceDirectory] = [], promptTemplate: String? = nil) {
         self.extraDirectories = extraDirectories
+        self.promptTemplate = promptTemplate?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
     }
 }
 
@@ -29,5 +31,11 @@ public final class WorkspaceStore: @unchecked Sendable {
         let data = try encoder.encode(configuration)
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: fileURL, options: .atomic)
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

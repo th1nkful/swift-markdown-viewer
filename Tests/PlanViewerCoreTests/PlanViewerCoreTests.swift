@@ -18,6 +18,21 @@ import Testing
     #expect(prompt.contains("Around L10 to L12: Tighten this section."))
 }
 
+@Test func promptBuilderUsesCustomTemplatePlaceholders() {
+    let builder = PlanPromptBuilder()
+    let comments: [PlanComment] = [
+        PlanComment(anchor: .file, text: "Top-level issue."),
+        PlanComment(anchor: .lineRange(start: 4, end: 4), text: "Clarify the title.")
+    ]
+
+    let prompt = builder.buildPrompt(
+        for: comments,
+        template: "Summary\n{{file_comments}}\n\nInline\n{{inline_comments}}"
+    )
+
+    #expect(prompt == "Summary\nTop-level issue.\n\nInline\nAround L4: Clarify the title.")
+}
+
 @Test func markdownParserTracksHeadingsListsAndCode() {
     let parser = MarkdownLineParser()
     let lines = parser.parse("# Title\n- [x] done\n```swift\nlet x = 1\n```\n> note")
@@ -68,7 +83,7 @@ import Testing
     let configuration = WorkspaceConfiguration(extraDirectories: [
         WorkspaceDirectory(name: "Repo", path: "~/code/repo"),
         WorkspaceDirectory(name: "Worktree", path: "~/code/repo-worktree")
-    ])
+    ], promptTemplate: "{{file_comments_section}}")
 
     try store.save(configuration)
     let loaded = store.load()
