@@ -19,6 +19,7 @@ struct PlannerMacApp: App {
             ContentView()
                 .environmentObject(appModel)
                 .environment(\.theme, appModel.selectedTheme)
+                .preferredColorScheme(appModel.selectedTheme.isSystem ? nil : (appModel.selectedTheme.isDark ? .dark : .light))
                 .frame(minWidth: 1200, minHeight: 760)
                 .onAppear {
                     NSApp.setActivationPolicy(.regular)

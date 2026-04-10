@@ -79,23 +79,40 @@ private struct SidebarRowView: View {
     }
 }
 
+private class AppearanceView: NSView {
+    var applyAppearance: ((NSWindow) -> Void)?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let window { applyAppearance?(window) }
+    }
+}
+
 private struct WindowAppearanceSetter: NSViewRepresentable {
     let isSystem: Bool
     let isDark: Bool
     let backgroundColor: NSColor
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { self.apply(from: view) }
+    func makeNSView(context: Context) -> AppearanceView {
+        let view = AppearanceView()
+        view.applyAppearance = { [isSystem, isDark, backgroundColor] window in
+            Self.applyTo(window: window, isSystem: isSystem, isDark: isDark, backgroundColor: backgroundColor)
+        }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async { self.apply(from: nsView) }
+    func updateNSView(_ nsView: AppearanceView, context: Context) {
+        nsView.applyAppearance = { [isSystem, isDark, backgroundColor] window in
+            Self.applyTo(window: window, isSystem: isSystem, isDark: isDark, backgroundColor: backgroundColor)
+        }
+        if let window = nsView.window {
+            DispatchQueue.main.async {
+                Self.applyTo(window: window, isSystem: isSystem, isDark: isDark, backgroundColor: backgroundColor)
+            }
+        }
     }
 
-    private func apply(from view: NSView) {
-        guard let window = view.window else { return }
+    private static func applyTo(window: NSWindow, isSystem: Bool, isDark: Bool, backgroundColor: NSColor) {
         if isSystem {
             window.appearance = nil
             window.backgroundColor = nil

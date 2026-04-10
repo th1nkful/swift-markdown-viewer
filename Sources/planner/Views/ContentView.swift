@@ -38,6 +38,7 @@ struct ContentView: View {
                 }
             }
         }
+        .toolbarBackground(theme.isSystem ? Color.clear : theme.mantle, for: .windowToolbar)
         .tint(theme.isSystem ? nil : theme.mauve)
         .sheet(isPresented: $showingSettings) {
             WorkspaceSettingsView()

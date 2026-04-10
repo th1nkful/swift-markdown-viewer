@@ -138,15 +138,8 @@ final class AppModel: ObservableObject {
     }
 
     func promptPreview() -> String {
-        var effectiveComments = comments.filter { comment in
-            if case .file = comment.anchor { return false }
-            return true
-        }
-        let trimmed = fileCommentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            effectiveComments.append(PlanComment(anchor: .file, text: trimmed))
-        }
-        return promptBuilder.buildPrompt(for: effectiveComments, template: workspaceConfiguration.promptTemplate)
+        syncFileComment()
+        return promptBuilder.buildPrompt(for: comments, template: workspaceConfiguration.promptTemplate)
     }
 
     func updatePromptTemplate(_ template: String) {
